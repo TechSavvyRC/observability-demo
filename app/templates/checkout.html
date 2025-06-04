@@ -1,8 +1,59 @@
 <!DOCTYPE html>
-<html>
-<head><title>Checkout</title></head>
-<body style="text-align:center;">
-<h2>You're almost there!</h2>
-<form action="/purchase" method="POST">
-<button type="submit" style="padding:10px 20px;">Confirm Purchase</button>
-</form></body></html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Checkout | TechSavvyRC</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      text-align: center;
+      padding: 2rem;
+      background: #e9f0f5;
+      color: #333;
+    }
+    header img {
+      width: 120px;
+      margin-bottom: 1rem;
+    }
+    h2 {
+      font-size: 1.75rem;
+      margin-bottom: 1rem;
+    }
+    button {
+      background-color: #28a745;
+      border: none;
+      color: white;
+      padding: 12px 24px;
+      font-size: 1rem;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: #218838;
+    }
+    footer {
+      margin-top: 2rem;
+      font-size: 0.9rem;
+      color: #666;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <img src="{{ url_for('static', filename='projects-personal.png') }}" alt="TechSavvyRC Logo">
+    <h2>You're almost there!</h2>
+    <p>Click the button below to confirm your purchase.</p>
+  </header>
+
+  <main>
+    <form action="/purchase" method="POST">
+      <button type="submit">Confirm Purchase</button>
+    </form>
+  </main>
+
+  <footer>
+    <p>&copy; 2025 TechSavvyRC. All rights reserved.</p>
+  </footer>
+</body>
+</html>

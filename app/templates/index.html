@@ -1,7 +1,60 @@
 <!DOCTYPE html>
-<html>
-<head><title>My Python Shop</title></head>
-<body style="text-align:center;">
-<h1>Welcome to Python Shop 🛍️</h1>
-<a href="/checkout"><button style="padding:10px 20px;">Checkout Now</button></a>
-</body></html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Welcome | TechSavvyRC</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      text-align: center;
+      padding: 2rem;
+      background: #f5f7fa;
+      color: #333;
+    }
+    header img {
+      width: 150px;
+      height: auto;
+      margin-bottom: 1rem;
+    }
+    h1 {
+      font-size: 2rem;
+      margin-bottom: 1rem;
+    }
+    button {
+      background-color: #007bff;
+      border: none;
+      color: white;
+      padding: 12px 24px;
+      font-size: 1rem;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: #0056b3;
+    }
+    footer {
+      margin-top: 2rem;
+      font-size: 0.9rem;
+      color: #666;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <img src="{{ url_for('static', filename='projects-personal.png') }}" alt="TechSavvyRC Logo">
+    <h1>Welcome to TechSavvyRC Shop 🛍️</h1>
+    <p>Your trusted demo app for Observability!</p>
+  </header>
+
+  <main>
+    <a href="/checkout">
+      <button>Checkout Now</button>
+    </a>
+  </main>
+
+  <footer>
+    <p>&copy; 2025 TechSavvyRC. All rights reserved.</p>
+  </footer>
+</body>
+</html>
