@@ -1,7 +1,20 @@
+# Filebeat monitors container logs and app logs.
+# It forwards data to Logstash for processing.
+
 filebeat.inputs:
   - type: container
+    enabled: true
     paths:
       - /var/lib/docker/containers/*/*.log
+    json.keys_under_root: true
+    json.add_error_key: true
+
+  - type: log
+    enabled: true
+    paths:
+      - /usr/share/filebeat/app-logs/*.log
+    json.keys_under_root: true
+    json.add_error_key: true
 
 output.logstash:
   hosts: ["logstash:5044"]
