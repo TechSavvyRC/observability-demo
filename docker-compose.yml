@@ -1,81 +1,182 @@
 version: '3.8'
 
 services:
-  python-app:
-    build: ./app
+
+  # ----------------------------------------
+  # Flask Microservice: TechSavvyRC
+  # ----------------------------------------
+  techsavvyrc-app:
+    build: ./app  # Builds image from ./app directory (Dockerfile needed)
+    container_name: techsavvyrc-app
     ports:
-      - "8000:8000"
+      - 8000:8000  # Expose Flask on host:container 8000
     environment:
+      # OTLP endpoint for traces (sent to OpenTelemetry Collector)
       - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
     depends_on:
-      - prometheus
       - otel-collector
+      - apm-server
+      - prometheus
     logging:
-      driver: "json-file"
+      driver: "json-file"  # Structured logs for Filebeat to pick up
+    networks:
+      - observability
 
-  prometheus:
-    image: prom/prometheus
-    volumes:
-      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
-    ports:
-      - "9090:9090"
-
-  grafana:
-    image: grafana/grafana
-    ports:
-      - "3000:3000"
-    volumes:
-      - ./grafana-data:/var/lib/grafana
-
+  # ----------------------------------------
+  # Elasticsearch: Stores logs, metrics, and traces
+  # ----------------------------------------
   elasticsearch:
-    image: docker.elastic.co/elasticsearch/elasticsearch:8.13.0
+    image: docker.elastic.co/elasticsearch/elasticsearch:${ELK_VERSION}
+    container_name: elasticsearch
+    ports:
+      - 9200:9200  # Search & analytics API
     environment:
-      - discovery.type=single-node
-      - xpack.security.enabled=false
-    ports:
-      - "9200:9200"
+      - discovery.type=single-node  # Dev mode only
+      - xpack.security.enabled=false  # Disable auth (not secure for production)
+    networks:
+      - observability
 
-  logstash:
-    image: docker.elastic.co/logstash/logstash:8.13.0
-    volumes:
-      - ./logstash/logstash.conf:/usr/share/logstash/pipeline/logstash.conf
+  # ----------------------------------------
+  # APM Server: Accepts traces/logs from OTel collector and agents
+  # ----------------------------------------
+  apm-server:
+    image: docker.elastic.co/apm/apm-server:${ELK_VERSION}
+    container_name: apm-server
+    ports:
+      - 8200:8200  # APM agent communication
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+      - KIBANA_HOST=http://kibana:5601
     depends_on:
       - elasticsearch
+      - kibana
+    networks:
+      - observability
 
+  # ----------------------------------------
+  # Kibana: Visualizes Elasticsearch data
+  # ----------------------------------------
   kibana:
-    image: docker.elastic.co/kibana/kibana:8.13.0
+    image: docker.elastic.co/kibana/kibana:${ELK_VERSION}
+    container_name: kibana
     ports:
-      - "5601:5601"
+      - 5601:5601  # Dashboard GUI
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
     depends_on:
       - elasticsearch
+    networks:
+      - observability
 
-  filebeat:
-    image: docker.elastic.co/beats/filebeat:8.13.0
+  # ----------------------------------------
+  # Metricbeat: Collects metrics (Docker, Host, etc.)
+  # ----------------------------------------
+  metricbeat:
+    image: docker.elastic.co/beats/metricbeat:${ELK_VERSION}
+    container_name: metricbeat
     user: root
     volumes:
-      - ./filebeat/filebeat.yml:/usr/share/filebeat/filebeat.yml
+      - ./metricbeat.yml:/usr/share/metricbeat/metricbeat.yml:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    depends_on:
+      - elasticsearch
+      - kibana
+    networks:
+      - observability
+
+  # ----------------------------------------
+  # Filebeat: Collects logs from Docker containers
+  # ----------------------------------------
+  filebeat:
+    image: docker.elastic.co/beats/filebeat:${ELK_VERSION}
+    container_name: filebeat
+    user: root
+    volumes:
+      - ./filebeat/filebeat.yml:/usr/share/filebeat/filebeat.yml:ro
       - /var/lib/docker/containers:/var/lib/docker/containers:ro
       - /var/run/docker.sock:/var/run/docker.sock
     depends_on:
       - logstash
+    networks:
+      - observability
 
-  otel-collector:
-    image: otel/opentelemetry-collector-contrib:latest
+  # ----------------------------------------
+  # Logstash: Parses and ships logs to Elasticsearch
+  # ----------------------------------------
+  logstash:
+    image: docker.elastic.co/logstash/logstash:${ELK_VERSION}
+    container_name: logstash
     volumes:
-      - ./otel/otel-config.yaml:/etc/otelcol/config.yaml
+      - ./logstash/logstash.conf:/usr/share/logstash/pipeline/logstash.conf
+    depends_on:
+      - elasticsearch
+    networks:
+      - observability
+
+  # ----------------------------------------
+  # Prometheus: Scrapes metrics from app and exporters
+  # ----------------------------------------
+  prometheus:
+    image: prom/prometheus:2.51.1  # Version pinned
+    container_name: prometheus
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+    ports:
+      - 9090:9090  # Prometheus GUI
+    networks:
+      - observability
+
+  # ----------------------------------------
+  # Grafana: Visualizes Prometheus data
+  # ----------------------------------------
+  grafana:
+    image: grafana/grafana:10.4.1  # Version pinned
+    container_name: grafana
+    ports:
+      - "3000:3000"  # Grafana UI
+    volumes:
+      - ./grafana-data:/var/lib/grafana
+    networks:
+      - observability
+
+  # ----------------------------------------
+  # OpenTelemetry Collector: Accepts traces/metrics
+  # ----------------------------------------
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.99.0
+    container_name: otel-collector
+    volumes:
+      - ./otel/otel-config.yaml:/etc/otelcol/config.yaml:ro
     command: ["--config=/etc/otelcol/config.yaml"]
     ports:
-      - "4318:4318"
+      - "4318:4318"  # OTLP HTTP endpoint
+    networks:
+      - observability
 
+  # ----------------------------------------
+  # Portainer: Docker GUI
+  # ----------------------------------------
   portainer:
-    image: portainer/portainer-ce
+    image: portainer/portainer-ce:2.20.3
     container_name: portainer
     ports:
-      - "9000:9000"
+      - "9000:9000"  # Admin UI
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - portainer_data:/data
     restart: unless-stopped
+    networks:
+      - observability
 
+# ----------------------------
+# Docker Volumes
+# ----------------------------
 volumes:
   portainer_data:
+
+# ----------------------------
+# Shared Network
+# ----------------------------
+networks:
+  observability:
+    driver: bridge
