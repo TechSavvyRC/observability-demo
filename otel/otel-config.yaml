@@ -1,18 +1,28 @@
 receivers:
   otlp:
     protocols:
+      grpc:
       http:
 
 exporters:
-  logging:
-    loglevel: debug
+  prometheus:
+    endpoint: "0.0.0.0:8889"
+    namespace: techsavvyrc
 
-processors:
-  batch:
+  otlp/elastic:
+    endpoint: "http://apm-server:8200"
+    tls:
+      insecure: true
+    headers:
+      # Authorization: "Bearer <your_token_here>"
 
 service:
   pipelines:
+    metrics:
+      receivers: [otlp]
+      exporters: [prometheus, otlp/elastic]
+
     traces:
       receivers: [otlp]
-      processors: [batch]
-      exporters: [logging]
+      exporters: [otlp/elastic]
+
