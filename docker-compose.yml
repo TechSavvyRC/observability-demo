@@ -1,5 +1,18 @@
 version: '3.8'
 
+# ----------------------------
+# Docker Volumes
+# ----------------------------
+volumes:
+  portainer_data:
+
+# ----------------------------
+# Shared Network
+# ----------------------------
+networks:
+  observability:
+    driver: bridge
+
 services:
 
   # ----------------------------------------
@@ -167,16 +180,3 @@ services:
     restart: unless-stopped
     networks:
       - observability
-
-# ----------------------------
-# Docker Volumes
-# ----------------------------
-volumes:
-  portainer_data:
-
-# ----------------------------
-# Shared Network
-# ----------------------------
-networks:
-  observability:
-    driver: bridge
