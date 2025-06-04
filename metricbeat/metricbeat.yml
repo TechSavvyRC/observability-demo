@@ -1,0 +1,27 @@
+# This Metricbeat config enables Docker module to collect container metrics.
+# Metrics are forwarded to Elasticsearch for analysis and dashboarding.
+
+metricbeat.config.modules:
+  path: ${path.config}/modules.d/*.yml
+  reload.enabled: false
+
+setup.kibana:
+  host: "http://kibana:5601"
+
+output.elasticsearch:
+  hosts: ["http://elasticsearch:9200"]
+
+processors:
+  - add_host_metadata: ~
+  - add_docker_metadata: ~
+
+# Docker module collects container-level stats
+metricbeat.modules:
+  - module: docker
+    metricsets:
+      - container
+      - cpu
+      - memory
+      - network
+    hosts: ["unix:///var/run/docker.sock"]
+    period: 10s
