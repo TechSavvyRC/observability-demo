@@ -1,7 +1,11 @@
+# Multi-line comments for clarity:
+# This Prometheus configuration file defines scraping jobs.
+# It scrapes metrics from the Flask app running at port 8000.
+
 global:
-  scrape_interval: 10s
+  scrape_interval: 15s  # How frequently to scrape targets by default.
 
 scrape_configs:
-  - job_name: 'python-app'
+  - job_name: 'techsavvyrc-app'
     static_configs:
-      - targets: ['python-app:8000']
+      - targets: ['techsavvyrc-app:8000']  # Endpoint exposing metrics via prometheus_client
