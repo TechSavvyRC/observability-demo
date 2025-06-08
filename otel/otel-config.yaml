@@ -1,28 +1,102 @@
+# --------------------------------------------------------------------------
+# otel/otel-config.yaml
+#
+# Definitive, unified configuration for the OpenTelemetry Collector:
+#  • Receives OTLP spans on :4318 (HTTP)
+#  • Receives Prometheus‐scraped metrics from the Flask app on :8000
+#  • Batches and enriches resource attributes
+#  • Exports spans to Elastic APM (APM Server)
+#  • Exposes the Collector’s own metrics on :8888 (Prometheus format)
+# --------------------------------------------------------------------------
+
 receivers:
+  # ------------------------------------------------------------------------
+  # 1) OTLP Receiver (for traces sent by our application/tracer)
+  #    - HTTP on port 4318 (/v1/traces)
+  #    - (Optionally, GRPC on 4317 if you uncomment)
+  # ------------------------------------------------------------------------
   otlp:
     protocols:
-      grpc:
+      # grpc:
+      #   endpoint: "0.0.0.0:4317"
       http:
+        endpoint: "0.0.0.0:4318"
+
+  # ------------------------------------------------------------------------
+  # 2) Prometheus Receiver (for scraping metrics from our Flask app)
+  # ------------------------------------------------------------------------
+  prometheus:
+    config:
+      # PROMETHEUS RECEIVER MUST USE 'scrape_configs' AS A MAP, NOT A LIST
+      # This fixes the "expected a map, got 'slice'" error.
+      scrape_configs:
+        - job_name: "techsavvyrc_app_metrics"
+          scrape_interval: 15s
+          static_configs:
+            - targets:
+                - "techsavvyrc-app:8000"
+              labels:
+                service: "techsavvyrc-app"
+                role: "webapp"
+
+processors:
+  # ------------------------------------------------------------------------
+  # 1) Batch Processor
+  #    - Groups spans and metrics into batches for efficient export
+  # ------------------------------------------------------------------------
+  batch:
+    timeout: 5s
+    send_batch_size: 1024
+    send_batch_max_size: 2048
+
+  # ------------------------------------------------------------------------
+  # 2) Resource Processor
+  #    - Adds or overrides resource attributes (e.g., service.name)
+  #    - We replaced 'detectors: [system]' (invalid key) with an explicit
+  #      attributes block. This fixes the "invalid keys: detectors" error.
+  # ------------------------------------------------------------------------
+  resource:
+    attributes:
+      - key: service.name
+        value: techsavvyrc
+        action: insert
 
 exporters:
+  # ------------------------------------------------------------------------
+  # 1) Elastic APM Exporter (OTLP over HTTP to APM Server)
+  #    - Sends tracing data to Elastic APM Server (listening on port 8200)
+  # ------------------------------------------------------------------------
+  otlphttp/apm:
+    endpoint: "http://apm-server:8200/v1/traces"
+
+  # ------------------------------------------------------------------------
+  # 2) Prometheus Exporter (exposes the Collector’s own metrics)
+  #    - Makes the Collector’s internal metrics available on port 8888
+  # ------------------------------------------------------------------------
   prometheus:
     endpoint: "0.0.0.0:8889"
-    namespace: techsavvyrc
-
-  otlp/elastic:
-    endpoint: "http://apm-server:8200"
-    tls:
-      insecure: true
-    headers:
-      # Authorization: "Bearer <your_token_here>"
 
 service:
   pipelines:
-    metrics:
-      receivers: [otlp]
-      exporters: [prometheus, otlp/elastic]
-
+    # ----------------------------------------------------------------------
+    # A) Traces Pipeline
+    #    - Receives spans via OTLP
+    #    - Runs them through batch + resource processors
+    #    - Exports to Elastic APM (otlp/apm)
+    # ----------------------------------------------------------------------
     traces:
       receivers: [otlp]
-      exporters: [otlp/elastic]
+      processors: [batch, resource]
+      exporters: [otlphttp/apm]
+
+    # ----------------------------------------------------------------------
+    # B) Metrics Pipeline
+    #    - Receives metrics via the Prometheus receiver’s scrape_configs
+    #    - Runs them through batch processor
+    #    - Exports the Collector’s own metrics in Prometheus format
+    # ----------------------------------------------------------------------
+    metrics:
+      receivers: [prometheus]
+      processors: [batch]
+      exporters: [prometheus]
 
