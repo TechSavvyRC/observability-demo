@@ -1,0 +1,82 @@
+# ======================================================================================
+# File: logstash.yml
+# Purpose: Production-grade configuration for Docker-based Logstash pipeline
+# Version: Compatible with Logstash 9.0.1
+# Maintainer: TechSavvyRC Observability Team
+# ======================================================================================
+
+# ---------------------------- Logstash Core Settings ----------------------------
+
+# Define how Logstash runs and where it stores internal data
+path.data: /usr/share/logstash/data
+
+# Enable persistent queues for buffering during Elasticsearch outages or slowdowns
+queue.type: persisted             # Use persistent queues for durability. Options: memory, persisted
+queue.max_bytes: 256mb            # Maximum disk space for queue
+queue.checkpoint.acks: 1024       # Acknowledge count before checkpoint
+queue.checkpoint.writes: 1024     # Write count before checkpoint
+queue.checkpoint.interval: 1000   # Millisecond interval for checkpoint
+
+# Enable dead letter queue (DLQ) for failed events
+dead_letter_queue.enable: true
+
+# Configure pipeline settings
+pipeline.ordered: auto            # Ensures ordered event processing where required
+pipeline.workers: 2               # Number of parallel workers (auto-tune for prod)
+pipeline.batch.size: 125          # Events processed per batch
+pipeline.batch.delay: 50          # Delay in milliseconds before batch is executed
+
+# Enable config reloading for dynamic pipeline updates
+config.reload.automatic: true
+config.reload.interval: 5s
+
+# ---------------------------- API and Monitoring ----------------------------
+
+# Enable REST API for monitoring
+api.enabled: true
+api.http.host: "0.0.0.0"
+api.http.port: 9600
+
+# Configure X-Pack Monitoring (replace credentials and HTTPS in prod)
+# xpack.monitoring.enabled: true
+xpack.monitoring.elasticsearch.hosts: ["http://elasticsearch:9200"]
+
+# ---------------------------- Logging Configuration ----------------------------
+
+# Logging path and level
+path.logs: /usr/share/logstash/logs
+log.level: info                  # Options: fatal, error, warn, info, debug, trace
+log.format: json                 # Output format: plain or json
+
+# ---------------------------- Security Settings ----------------------------
+
+# NOTE: For production, enable SSL and secure communication
+# xpack.monitoring.elasticsearch.username: "logstash_system"
+# xpack.monitoring.elasticsearch.password: "<secure_password>"
+# xpack.monitoring.elasticsearch.ssl.certificate_authority: "/path/to/ca.crt"
+# xpack.monitoring.elasticsearch.ssl.verification_mode: certificate
+
+# ---------------------------- Docker Integration ----------------------------
+
+# Run Logstash in foreground (required for Docker)
+#node.name: logstash-docker
+#http.host: "0.0.0.0"
+
+# ---------------------------- Environment Variable Overrides ----------------------------
+# These can be overridden using -e or docker-compose environment blocks
+# Example: LOG_LEVEL=debug LOGSTASH_JAVA_OPTS="-Xms1g -Xmx1g"
+
+# ---------------------------- Validation and Hot Reload ----------------------------
+
+# Config validation mode available via CLI:
+# logstash -t -f /usr/share/logstash/pipeline/logstash.conf
+
+# Configuration is hot reloadable if mounted as a volume to:
+#   /usr/share/logstash/pipeline/
+# Example:
+#   docker run -v ./pipeline:/usr/share/logstash/pipeline/ logstash:9.0.1
+
+# ======================================================================================
+# END OF CONFIGURATION FILE
+# ======================================================================================
+
