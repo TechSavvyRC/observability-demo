@@ -1,20 +1,195 @@
-# Filebeat monitors container logs and app logs.
-# It forwards data to Logstash for processing.
+# ===================================================================================
+# Filebeat Configuration File - Version 9.0.1
+#
+# Description:
+#   This configuration is designed specifically for a containerized observability setup.
+#   It captures both application logs and Docker container logs using Filebeat inside
+#   a Docker environment.
+#
+# Purpose:
+#   - Educational and training use only.
+#   - Not suitable for production environments due to the absence of essential security
+#      features like TLS encryption, user authentication, and hardened logging.
+#
+# GitHub Reference:
+#   Full stack and related files are available here:
+#   https://github.com/TechSavvyRC/techsavvyrc-demo
+#
+# Official Documentation:
+#   https://www.elastic.co/guide/en/beats/filebeat/9.0/filebeat-reference-yml.html
+# ===================================================================================
 
+# ================================= General Settings ================================
+# Basic identification and tagging for this Filebeat instance.
+# Sets the name, adds tags for filtering, and includes custom fields in all events.
+name: "filebeat-techsavvyrc"                                # Custom name for this Filebeat instance
+tags: ["techsavvyrc-app", "docker", "training", "testing"]  # Tags added to every event
+fields:                                                     # Additional fields in each event
+  environment: "testing"                                    # Custom fields added to all events
+
+
+# ================================== Path Settings ==================================
+# Directory paths where Filebeat stores configuration, data, and its own log files.
+# These paths ensure proper file organization within the container.
+path.config: "/usr/share/filebeat"                     # Base path for config
+path.data: "/usr/share/filebeat/data"                  # Path to registry/state
+path.logs: "/usr/share/filebeat/logs_filebeat"         # Path for internal logs
+
+
+# =================================== Input Settings ================================
+# Defines input sources to harvest logs from files, containers, or other systems.
+# Each input can include parsing rules (e.g., multiline handling) and preprocessing
+# logic (e.g., enrichment via processors).
+# Supported input types include: filestream, docker, journald, tcp/udp, etc.
 filebeat.inputs:
-  - type: container
+
+  # Input to monitor application log file from a mounted path inside the container.
+  # Includes multiline parsing for stack traces and adds custom metadata to events.
+  - type: filestream                                    # Recommended in Filebeat 9.x
+    id: "techsavvyrc-app-log"                           # Unique ID for the input
+    enabled: true                                       # Enable this input
+    paths:
+      - "/usr/share/filebeat/logs/techsavvyrc.log"      # Mounted log file path
+    # Multiline parsing for Python stack traces
+    parsers:
+      - multiline:
+          type: pattern
+          pattern: '^[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2},[0-9]{3} '  # Timestamp pattern
+          match: after                                  # Append continuation lines *after* matched lines
+          negate: true                                  # Treat non-matching lines as continuation
+          max_lines: 500                                # Max lines per event
+          timeout: 10s                                  # Flush if no new line within 10 seconds
+          #ignore_older: 0s                             # Do not skip old files
+    # Event enrichment
+    processors:
+      - add_fields:                                     # Add custom fields to events
+          target: ""
+          fields:
+            service: "techsavvyrc-app"
+            log_source: "internal"
+      - add_host_metadata: {}                           # Adds host metadata (OS, hostname, etc.)
+
+  # Streams logs from all Docker containers (mounted via /var/lib/docker/containers)
+  # Docker log files are JSON formatted. We decode JSON here.
+  - type: filestream
+    id: "docker-containers"
     enabled: true
     paths:
-      - /var/lib/docker/containers/*/*.log
-    json.keys_under_root: true
-    json.add_error_key: true
+      - /var/lib/docker/containers/*/*.log              # All container logs
+    symlinks: true                                      # Follow symlinks (just in case)
+    parsers:
+      - ndjson:
+          keys_under_root: true                         # Place JSON keys at root level
+          overwrite_keys: true                          # Overwrite conflicting keys like "message"
+    processors:
+      - add_fields:
+          target: ""
+          fields:
+            service: "docker-container"                 # Mark logs as from docker container
+             log_source: "docker"
+     - add_docker_metadata:                            # Adds container ID, name, labels, etc.
+          host: "unix:///var/run/docker.sock"
+          match_source: true
 
-  - type: log
-    enabled: true
-    paths:
-      - /usr/share/filebeat/app-logs/*.log
-    json.keys_under_root: true
-    json.add_error_key: true
 
-output.logstash:
-  hosts: ["logstash:5044"]
+# ================================== Module Settings ================================
+# Configuration for Filebeat modules (nginx, system, etc.).
+# Currently disabled but ready for future use - modules provide pre-built configs for common services.
+filebeat.config.modules:
+  path: ${path.config}/modules.d/*.yml
+  reload.enabled: false       # Enable for dynamic module loading
+  reload.period: 10s          # How often to check for module file changes
+
+
+# ================================= Output Settings =================================
+# Configuration for where to send processed log events.
+# Primary output is Logstash, with alternative outputs commented for easy activation.
+# Primary output to Logstash
+#output.logstash:
+#  hosts: ["logstash:5044"]          # Logstash listening on port 5044
+#  loadbalance: false                # Set true for multi-node logstash
+#  bulk_max_size: 200                # Max events per bulk request
+#  worker: 1                         # Number of concurrent workers
+
+# Direct output to Elasticsearch, uncomment if used without Logstash.
+# output.elasticsearch:
+#   hosts: ["http://elasticsearch:9200"]              # ES URL
+#   index: "techsavvyrc-%{+yyyy.MM.dd}"               # Dynamic index name
+#   pipeline: "filebeat-%{[agent.version]}-pipeline"  # Optional ingest pipeline
+#   username: "elastic"                               # Auth user
+#   password: "changeme"                              # Auth password
+#   ssl.enabled: false                                # Enable for HTTPS
+#   bulk_max_size: 200
+#   worker: 1
+output.elasticsearch:
+  hosts: ["http://elasticsearch:9200"]
+  indices:
+    - index: "techsavvyrc-app-%{+yyyy.MM.dd}"     # For app logs
+      when.equals:
+        fields.service: "techsavvyrc-app"
+    - index: "docker-containers-%{+yyyy.MM.dd}"   # For container logs
+      when.equals:
+        fields.service: "docker-containers"
+
+# Console output for debugging:
+# output.console:
+#   enabled: true
+
+
+# ================================= Queue Settings ==================================
+# In-memory queue configuration for buffering events before output.
+# Controls memory usage and batching behavior for optimal performance.
+queue.mem:
+  events: 4096                # maximum events to keep in memory (default ~4096)
+  flush.min_events: 1024      # force a flush to output when ≥1024 events are ready
+  flush.timeout: 1s           # force a flush if no new events after 1s
+
+
+# =============================== Dashboard Setup ===============================
+# Kibana dashboard and index template setup configuration.
+# When enabled, automatically creates dashboards and templates during setup phase.
+# Kibana dashboard configuration (uncomment to enable)
+# setup.dashboards.enabled: true
+# setup.dashboards.index: ".filebeat"         # where dashboards are stored in ES
+# setup.dashboards.overwrite: false           # set to true to re-import every setup run
+# setup.dashboards.directory: "/path/to/your/custom/dashboards"
+
+# setup.kibana:
+#   hosts: ["http://kibana:5601"]           # Kibana endpoint
+#   username: "kibana_system"               # Optional authentication
+#   password: "changeme"
+
+
+# ================================ Logging Settings ===============================
+# Configuration for Filebeat's own internal logging.
+# Controls log levels, file rotation, and where Filebeat writes its operational logs.
+logging.level: debug                          # Options: debug, info, warning, error, critical
+logging.selectors: ["*multiline*"]            # Focus on multiline logs
+logging.to_files: true
+logging.files:
+  path: "/usr/share/filebeat/logs_filebeat"   # Log file location
+  name: "filebeat.log"
+  rotateeverybytes: 10485760                  # Rotate every 10 MB
+  keepfiles: 7                                # Keep last 7 files before deletion
+  permissions: 0644
+logging.to_syslog: false
+logging.json: false
+logging.metrics.enabled: false
+logging.metrics.period: 30s
+
+
+# ============================== Monitoring Settings ==============================
+# Self-monitoring configuration for Filebeat performance metrics.
+# When enabled, sends Filebeat's own operational metrics to Elasticsearch for monitoring.
+monitoring.enabled: false
+
+# To send to Elasticsearch:
+# monitoring.elasticsearch:
+#   hosts: ["http://elasticsearch:9200"]
+# To register monitoring dashboards in Kibana:
+# monitoring.kibana:
+#   hosts: ["http://kibana:5601"]
+#   username: "kibana_system"
+#   password: "changeme"
+# If you have Elastic Agent, disable Filebeat’s built-in monitoring:
+# monitoring.elastic_agent.enabled: true
