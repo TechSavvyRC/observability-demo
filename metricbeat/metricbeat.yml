@@ -1,27 +1,90 @@
-# This Metricbeat config enables Docker module to collect container metrics.
-# Metrics are forwarded to Elasticsearch for analysis and dashboarding.
+# ----------------------------------------
+# metricbeat/metricbeat.yml
+#
+# Metricbeat collects metrics from multiple sources and ships them to Elasticsearch.
+#
+# We collect:
+#   1. Host (system) metrics: CPU, memory, disk, network
+#   2. Docker container metrics
+#   3. Prometheus metrics from our Flask app (techsavvyrc-app:8000/metrics)
+#
+# Then we send all metrics to Elasticsearch to compare:
+#   - Prometheus metrics via ES
+#   - Infrastructure metrics via ES
+# ----------------------------------------
 
+# ---- Metricbeat Modules ----
 metricbeat.config.modules:
   path: ${path.config}/modules.d/*.yml
   reload.enabled: false
 
-setup.kibana:
-  host: "http://kibana:5601"
+# We explicitly define modules in this file.
 
-output.elasticsearch:
-  hosts: ["http://elasticsearch:9200"]
-
-processors:
-  - add_host_metadata: ~
-  - add_docker_metadata: ~
-
-# Docker module collects container-level stats
 metricbeat.modules:
+  # ----------------------------------------
+  # 1) System Module: Collect Host (VM) Metrics
+  # ----------------------------------------
+  - module: system
+    period: 15s
+    metricsets:
+      - cpu
+      - memory
+      - network
+      - diskio
+      - filesystem
+      - fsstat
+    enabled: true
+
+  # ----------------------------------------
+  # 2) Docker Module: Collect Container Metrics
+  # ----------------------------------------
   - module: docker
+    period: 15s
+    hosts: ["unix:///var/run/docker.sock"]
     metricsets:
       - container
       - cpu
       - memory
       - network
-    hosts: ["unix:///var/run/docker.sock"]
-    period: 10s
+      - diskio
+    enabled: true
+    fields:
+      service: "docker"
+      type: "container_metrics"
+
+  # ----------------------------------------
+  # 3) Prometheus Module: Scrape Flask App Metrics
+  # ----------------------------------------
+  - module: prometheus
+    period: 15s
+    hosts: ["http://techsavvyrc-app:8000"]
+    metrics_path: /metrics
+    enabled: true
+    namespace: "techsavvyrc_app"
+    fields:
+      service: "techsavvyrc-app"
+      type: "app_metrics"
+
+# ----------------------------------------
+# Output Configuration: Send metrics to Elasticsearch
+# ----------------------------------------
+output.elasticsearch:
+  hosts: ["http://elasticsearch:9200"]
+
+# ----------------------------------------
+# (Optional) Setup Kibana Dashboards
+# ----------------------------------------
+setup.kibana:
+  host: "http://kibana:5601"
+  dashboards.enabled: true  # Enables loading built-in dashboards
+
+# ----------------------------------------
+# Logging for Metricbeat Itself
+# ----------------------------------------
+logging.level: info
+logging.to_files: true
+logging.files:
+  path: /var/log/metricbeat
+  name: metricbeat.log
+  keepfiles: 7
+  rotateeverybytes: 10485760  # 10MB
