@@ -1,0 +1,22 @@
+# ----------------------------------------
+# grafana/provisioning/datasources/prometheus.yaml
+#
+# This file auto-provisions a Prometheus data source in Grafana.
+# When Grafana starts, it will read this file and create (or update)
+# a data source named "Prometheus" that points to our Prometheus server.
+#
+# Location inside container: /etc/grafana/provisioning/datasources/
+# We must bind-mount this folder so Grafana sees it.
+# ----------------------------------------
+
+apiVersion: 1
+datasources:
+  - name: Prometheus
+    type: prometheus
+    access: proxy
+    orgId: 1
+    isDefault: true
+    url: http://prometheus:9090   # This must match the container name and port
+    editable: false
+    version: 1
+    basicAuth: false
