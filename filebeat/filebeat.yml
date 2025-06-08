@@ -132,9 +132,9 @@ output.elasticsearch:
         fields.service: "docker-containers"
 
 # Console output for debugging:
-# output.console:
-#   enabled: true
-
+#output.console:
+#  enabled: true
+#  pretty: true
 
 # ================================= Queue Settings ==================================
 # In-memory queue configuration for buffering events before output.
