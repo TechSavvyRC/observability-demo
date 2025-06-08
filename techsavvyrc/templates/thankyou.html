@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Thank You | TechSavvyRC</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      text-align: center;
+      padding: 2rem;
+      background: #f0fff4;
+      color: #333;
+    }
+    header img {
+      width: 120px;
+      margin-bottom: 1rem;
+    }
+    h2 {
+      font-size: 1.75rem;
+      margin-bottom: 0.5rem;
+    }
+    p {
+      font-size: 1.2rem;
+      margin-bottom: 1.5rem;
+    }
+    button {
+      background-color: #17a2b8;
+      border: none;
+      color: white;
+      padding: 12px 24px;
+      font-size: 1rem;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: #117a8b;
+    }
+    footer {
+      margin-top: 2rem;
+      font-size: 0.9rem;
+      color: #666;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <img src="{{ url_for('static', filename='projects-personal.png') }}" alt="TechSavvyRC Logo">
+    <h2>Thank you for your purchase! 🧾</h2>
+    <p>You spent ${{ amount }}</p>
+  </header>
+
+  <main>
+    <a href="/">
+      <button>Back to Home</button>
+    </a>
+  </main>
+
+  <footer>
+    <p>&copy; 2025 TechSavvyRC. All rights reserved.</p>
+  </footer>
+</body>
+</html>
