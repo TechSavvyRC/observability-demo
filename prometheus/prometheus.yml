@@ -1,11 +1,64 @@
-# Multi-line comments for clarity:
-# This Prometheus configuration file defines scraping jobs.
-# It scrapes metrics from the Flask app running at port 8000.
+# ----------------------------------------
+# prometheus/prometheus.yml
+#
+# This is the main Prometheus server configuration file.
+# It tells Prometheus which targets (endpoints) to scrape for metrics.
+#
+# Key goals:
+#   - Scrape our Flask app (techsavvyrc-app) at /metrics
+#   - (Optional) Scrape OTel Collector if enabled
+#
+# Prometheus will run inside a container named "prometheus" on port 9090.
+# It has been bind-mounted to this file, so whenever Prometheus starts,
+# it reads this YAML.
+# ----------------------------------------
 
+# Global scrape configuration
 global:
-  scrape_interval: 15s  # How frequently to scrape targets by default.
+  scrape_interval: 15s    # Every 15 seconds, scrape each target
+  scrape_timeout: 10s     # If a target takes longer than 10s, the scrape fails
+  evaluation_interval: 15s  # Evaluate alerting & recording rules every 15s
 
+# ---------------------------------------------------
+# SCRAPE CONFIGURATIONS
+# ---------------------------------------------------
 scrape_configs:
-  - job_name: 'techsavvyrc-app'
+
+  # ----------------------------------------
+  # 1) Scrape the Flask application: techsavvyrc-app
+  # ----------------------------------------
+  - job_name: "techsavvyrc_app_metrics"
     static_configs:
-      - targets: ['techsavvyrc-app:8000']  # Endpoint exposing metrics via prometheus_client
+      - targets:
+          - "techsavvyrc-app:8000"
+        labels:
+          service: "techsavvyrc-app"
+          role: "webapp"
+
+    metrics_path: "/metrics"
+    scheme: "http"
+
+  # ----------------------------------------
+  # 2) (Optional) Scrape the OTel Collector’s built-in metrics
+  #    If the Collector is configured to export metrics on port 8888,
+  #    uncomment this block. Otherwise, keep it commented.
+  # ----------------------------------------
+  - job_name: "otel_collector_metrics"
+    static_configs:
+      - targets:
+          - "otel-collector:8889"
+        labels:
+          service: "otel-collector"
+          role: "collector"
+    metrics_path: "/metrics"
+    scheme: "http"
+
+  # ----------------------------------------
+  # 3) (Optional) Scrape any external exporters, e.g., node_exporter
+  # ----------------------------------------
+  # - job_name: "node_exporter"
+  #   static_configs:
+  #     - targets:
+  #         - "node-exporter:9100"
+
+# End of prometheus.yml
