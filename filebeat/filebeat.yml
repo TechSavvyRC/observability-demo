@@ -86,8 +86,8 @@ filebeat.inputs:
           target: ""
           fields:
             service: "docker-container"                 # Mark logs as from docker container
-             log_source: "docker"
-     - add_docker_metadata:                            # Adds container ID, name, labels, etc.
+            log_source: "docker"
+      - add_docker_metadata:                            # Adds container ID, name, labels, etc.
           host: "unix:///var/run/docker.sock"
           match_source: true
 
