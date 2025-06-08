@@ -49,7 +49,7 @@ filebeat.inputs:
     id: "techsavvyrc-app-log"                           # Unique ID for the input
     enabled: true                                       # Enable this input
     paths:
-      - "/usr/share/filebeat/logs/techsavvyrc.log"      # Mounted log file path
+      - "/usr/share/filebeat/logs/techsavvyrc-app.log"  # Mounted log file path
     # Multiline parsing for Python stack traces
     parsers:
       - multiline:
