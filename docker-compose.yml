@@ -1,10 +1,12 @@
-version: '3.8'
+#version: '3.8'
 
 # ----------------------------
 # Docker Volumes
 # ----------------------------
 volumes:
-  portainer_data:
+  es_data:        # Persist Elasticsearch indices across restarts
+  portainer_data: # Persist Portainer’s SQLite data
+  filebeat_data:  # Stores Filebeat registry
 
 # ----------------------------
 # Shared Network
@@ -19,19 +21,21 @@ services:
   # Flask Microservice: TechSavvyRC
   # ----------------------------------------
   techsavvyrc-app:
-    build: ./app  # Builds image from ./app directory (Dockerfile needed)
+    build: ./techsavvyrc
     container_name: techsavvyrc-app
     ports:
-      - 8000:8000  # Expose Flask on host:container 8000
+      - 8000:8000
+    volumes:
+      - ./techsavvyrc/logs:/app/log
     environment:
-      # OTLP endpoint for traces (sent to OpenTelemetry Collector)
+      # OTLP endpoint for spans
       - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
     depends_on:
       - otel-collector
       - apm-server
       - prometheus
     logging:
-      driver: "json-file"  # Structured logs for Filebeat to pick up
+      driver: "json-file"
     networks:
       - observability
 
@@ -42,10 +46,12 @@ services:
     image: docker.elastic.co/elasticsearch/elasticsearch:${ELK_VERSION}
     container_name: elasticsearch
     ports:
-      - 9200:9200  # Search & analytics API
+      - 9200:9200
     environment:
-      - discovery.type=single-node  # Dev mode only
-      - xpack.security.enabled=false  # Disable auth (not secure for production)
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+    volumes:
+      - es_data:/usr/share/elasticsearch/data
     networks:
       - observability
 
@@ -56,7 +62,7 @@ services:
     image: docker.elastic.co/apm/apm-server:${ELK_VERSION}
     container_name: apm-server
     ports:
-      - 8200:8200  # APM agent communication
+      - 8200:8200
     environment:
       - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
       - KIBANA_HOST=http://kibana:5601
@@ -73,7 +79,7 @@ services:
     image: docker.elastic.co/kibana/kibana:${ELK_VERSION}
     container_name: kibana
     ports:
-      - 5601:5601  # Dashboard GUI
+      - 5601:5601
     environment:
       - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
     depends_on:
@@ -106,8 +112,11 @@ services:
     user: root
     volumes:
       - ./filebeat/filebeat.yml:/usr/share/filebeat/filebeat.yml:ro
+      - ./techsavvyrc/logs:/usr/share/filebeat/logs:ro 
       - /var/lib/docker/containers:/var/lib/docker/containers:ro
-      - /var/run/docker.sock:/var/run/docker.sock
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - filebeat_data:/usr/share/filebeat/data
+      # - ./filebeat/modules.d:/usr/share/filebeat/modules.d:ro
     depends_on:
       - logstash
     networks:
@@ -120,22 +129,30 @@ services:
     image: docker.elastic.co/logstash/logstash:${ELK_VERSION}
     container_name: logstash
     volumes:
-      - ./logstash/logstash.conf:/usr/share/logstash/pipeline/logstash.conf
+      - ./logstash/logstash.conf:/usr/share/logstash/pipeline/logstash.conf:ro
+      - ./logstash/logstash.yml:/usr/share/logstash/config/logstash.yml
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - filebeat_data:/usr/share/filebeat/data
+    ports:
+      - 5044:5044
     depends_on:
       - elasticsearch
     networks:
       - observability
+    environment:
+      - LS_JAVA_OPTS=-Xms2g -Xmx2g
 
   # ----------------------------------------
-  # Prometheus: Scrapes metrics from app and exporters
+  # Prometheus: Scrapes metrics from app and (optionally) OTel Collector
   # ----------------------------------------
   prometheus:
     image: prom/prometheus
     container_name: prometheus
     volumes:
-      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
     ports:
-      - 9090:9090  # Prometheus GUI
+      - 9090:9090
     networks:
       - observability
 
@@ -146,14 +163,15 @@ services:
     image: grafana/grafana
     container_name: grafana
     ports:
-      - "3000:3000"  # Grafana UI
+      - "3000:3000"
     volumes:
       - ./grafana-data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
     networks:
       - observability
 
   # ----------------------------------------
-  # OpenTelemetry Collector: Accepts traces/metrics
+  # OpenTelemetry Collector: Accepts OTLP spans
   # ----------------------------------------
   otel-collector:
     image: otel/opentelemetry-collector-contrib:latest
@@ -162,7 +180,9 @@ services:
       - ./otel/otel-config.yaml:/etc/otelcol/config.yaml:ro
     command: ["--config=/etc/otelcol/config.yaml"]
     ports:
-      - "4318:4318"  # OTLP HTTP endpoint
+      - "4318:4318"
+      - "8888:8888"
+      - "8889:8889"
     networks:
       - observability
 
@@ -173,7 +193,7 @@ services:
     image: portainer/portainer-ce
     container_name: portainer
     ports:
-      - "9000:9000"  # Admin UI
+      - "9000:9000"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - portainer_data:/data
