@@ -79,7 +79,7 @@ OTLP_ENDPOINT = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://otel-collector:
 # LOG_LEVEL: INFO (default), DEBUG, WARNING, etc.
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
 # LOG_FILE: path to the file where logs will be written
-LOG_FILE = os.getenv("LOG_FILE", "/app/log/techsavvyrc.log")
+LOG_FILE = os.getenv("LOG_FILE", "/app/log/techsavvyrc-app.log")
 
 # ---------------------- Logging Setup ----------------------
 # Create a logger named after the service
